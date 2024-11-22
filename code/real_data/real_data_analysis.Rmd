@@ -1,0 +1,332 @@
+---
+title: "Real data analysis"
+author: "Wei Zhang"
+date: "2024-08-26"
+output:
+  html_document:
+    highlight: pygments
+    theme: yeti
+    toc: true
+    number_sections: true
+    df_print: paged
+    code_download: false
+    toc_float:
+      collapsed: yes
+    toc_depth: 3
+editor_options:
+  chunk_output_type: inline    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+dir.base <- "."
+dir.data <- file.path(dir.base, "data_processed/")
+```
+
+# BRCA
+
+```{r}
+# Data folder
+cohort <- "BRCA"
+dir.data.raw <- file.path(dir.data, cohort, "raw/")
+dir.data.processed <- file.path(dir.data, cohort, "processed/")
+
+# Results folder
+dir.results <- file.path(dir.base, "data_results/", cohort)
+```
+
+## Load pretrained model
+
+```{r}
+load(
+  file.path(dir.results, "BRCA_10_rep_results.rda")
+)
+load(file.path(dir.data.processed, "BRCA_three_omics_top_2000.rda"))
+```
+
+## Model selection variation boxplot
+
+```{r}
+ggplot(data = df, aes(x = dataset, y = num_var_selected, fill = model)) + 
+  geom_boxplot(outlier.shape = NA) +
+  theme_bw() +
+  ggsci::scale_fill_npg(labels = c("MRF-IMD-filter", "MRF-IMD-mixture", "MRF-IMD-trans")) +
+  ggtitle("TCGA-BRCA") +
+  xlab("Dataset") +
+  ylim(c(0,350)) +
+  ylab("Number of features selected") + 
+  geom_point(position=position_jitterdodge(), size = .5) +
+  scale_x_discrete(labels = c("gene" = "Gene", "methy" = "Mehtyl", "mirna" = "miRNA")) + 
+  theme(legend.position = "top") +
+  geom_vline(xintercept = c(1.5,2.5), linetype = "dashed", color = "grey") 
+ggsave(
+  file.path(dir.results, "brca_var_selected_10_rep.pdf"),
+  width = 5, height = 5
+)
+```
+
+## Survival analysis and KM plot
+
+```{r}
+surv <- plyr::llply(
+  mod_list[[1]]$mrf,
+  .fun = function(k) {
+    plyr::llply(
+      k$dat.list,
+      .fun = function(df) {
+        results <- plyr::adply(
+          df,
+          .margins = 2,
+          .fun = function(p) {
+            cox <- coxph(Surv(time = OS.time, event = OS) ~ probe, 
+                         data = data.frame(tcga_brca_clinical, probe = p))
+            data.frame(summary(cox)$coefficients)
+          },.id = "feature"
+        )
+        results
+      }
+    )
+    
+  }
+)
+```
+
+## Pathway analysis
+
+```{r}
+ora_results_c2cp <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "c2.cp", minGSSize = 2, maxGSSize = 1000)
+ora_results_h <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "H", minGSSize = 2, maxGSSize = 1000)
+ora_results_go <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "c5.bp", minGSSize = 2, maxGSSize = 1000)
+```
+
+```{r}
+results <- rbind(data.frame(data.frame(ora_results_c2cp@result), 
+                            category = rep("Canonical", nrow(data.frame(ora_results_c2cp@result)))),
+                  data.frame(data.frame(ora_results_go@result), 
+                            category = rep("GO", nrow(data.frame(ora_results_go@result)))),
+                 data.frame(data.frame(ora_results_h@result), 
+                            category = rep("Hallmark", nrow(data.frame(ora_results_h@result)))))
+```
+
+```{r}
+p1 <- plot_pathway(results, ylim = 1e-06, padj = 0.25)
+```
+
+# COAD
+
+```{r}
+# Data folder
+cohort <- "COAD"
+dir.data.raw <- file.path(dir.data, cohort, "raw/")
+dir.data.processed <- file.path(dir.data, cohort, "processed/")
+
+# Results folder
+dir.results <- file.path(dir.base, "data_results/", cohort)
+```
+
+```{r}
+load(
+  file.path(dir.results, "COAD_10_rep_results.rda")
+)
+```
+
+## Model selection variation boxplot
+
+```{r}
+ggplot(data = df, aes(x = dataset, y = num_var_selected, fill = model)) + 
+  geom_boxplot(outlier.shape = NA) +
+  theme_bw() +
+  ggsci::scale_fill_npg(labels = c("MRF-IMD-filter", "MRF-IMD-mixture", "MRF-IMD-trans")) +
+  ggtitle("TCGA-COAD") +
+  xlab("Dataset") +
+  ylim(c(0,350)) +
+  ylab("Number of features selected") + 
+  geom_point(position=position_jitterdodge(), size = .5) +
+  scale_x_discrete(labels = c("gene" = "Gene", "methy" = "Mehtyl", "mirna" = "miRNA")) + 
+  theme(legend.position = "top") +
+  geom_vline(xintercept = c(1.5,2.5), linetype = "dashed", color = "grey") 
+ggsave(
+  file.path(dir.results, "COAD_var_selected_10_rep.pdf"),
+  width = 5, height = 5
+)
+```
+
+## Survival analysis and KM plot
+
+```{r}
+surv <- plyr::llply(
+  mod_list[[1]]$mrf,
+  .fun = function(k) {
+    plyr::llply(
+      k$dat.list,
+      .fun = function(df) {
+        results <- plyr::adply(
+          df,
+          .margins = 2,
+          .fun = function(p) {
+            cox <- coxph(Surv(time = OS.time, event = OS) ~ probe, 
+                         data = data.frame(tcga_coad_clinical, probe = p))
+            data.frame(summary(cox)$coefficients)
+          },.id = "feature"
+        )
+        results
+      }
+    )
+    
+  }
+)
+```
+
+```{r}
+dat <- mod_list[[1]]$mrf %>% purrr::map("dat.list")
+dat2 <- plyr::llply(
+  names(dat$filter),
+  .fun = function(d) {
+    dat$filter[[d]][,surv$filter[[d]] %>% filter(`Pr...z..` < 0.05) %>% pull(feature)]
+  }
+)
+```
+
+## Pathway analysis
+
+```{r}
+ora_results_c2cp <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "c2.cp", minGSSize = 2, maxGSSize = 1000)
+ora_results_h <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "H", minGSSize = 2, maxGSSize = 1000)
+ora_results_go <- ORA(colnames(mod_list[[1]]$mrf$filter$dat.list$gene), pathway = "c5.bp", minGSSize = 2, maxGSSize = 1000)
+```
+
+```{r}
+results <- rbind(data.frame(data.frame(ora_results_c2cp@result), 
+                            category = rep("Canonical", nrow(data.frame(ora_results_c2cp@result)))),
+                  data.frame(data.frame(ora_results_go@result), 
+                            category = rep("GO", nrow(data.frame(ora_results_go@result)))),
+                 data.frame(data.frame(ora_results_h@result), 
+                            category = rep("Hallmark", nrow(data.frame(ora_results_h@result)))))
+```
+
+```{r}
+p2 <- plot_pathway(results, ylim = 1e-06, padj = 0.25)
+```
+
+```{r}
+library(cowplot)
+plot_grid(p1,p2,ncol = 1, align="v",
+          labels = c("TCGA-BRCA", "TCGA-COAD")) 
+```
+
+```{r}
+ggsave(
+  file.path(dir.results, "COAD_BRCA_c2cp_h_pathway_barplot.pdf"),
+  width = 15,
+  height = 15
+)
+```
+
+# PANCAN
+
+```{r}
+# Data folder
+cohort <- "PAN"
+dir.data.raw <- file.path(dir.data, cohort, "raw/")
+dir.data.processed <- file.path(dir.data, cohort, "processed/")
+
+# Results folder
+dir.results <- file.path(dir.base, "data_results/", cohort)
+```
+
+## Load preprocessed data
+
+```{r}
+meta <- data.table::fread(
+  file.path(dir.data, "raw/TCGA_ATAC_peak.all.probeMap")
+) 
+meta2 <- data.table::fread(
+  file.path(dir.data, "raw/TCGA-ATAC_PanCancer_PeakSet.txt")
+) %>% dplyr::mutate(id = name, 
+                    chrom = seqnames, 
+                    .keep = "unused")
+atac_anno <- left_join(
+  meta,
+  meta2
+)
+```
+
+```{r}
+load(
+  file.path(dir.data.processed, "PAN_tpm_atac_clinical.rda")
+)
+```
+
+```{r}
+# Load pre-trained model
+load(
+  file.path(dir.results, "PAN_all_atac_50000_rna_5000_mod.rda")
+)
+```
+
+## Variable selection using multiMRF
+
+```{r}
+mods_vs <- mrf3_vs(mods, dat.list = pan_filtered, method = "filter", scale = T)
+mods_vs2 <- mrf3_vs(mods, dat.list = pan_filtered, method = "mixture", scale = T, c1 = "normal")
+mods_vs3 <- mrf3_vs(mods, dat.list = pan_filtered, method = "test", scale = T)
+```
+
+## Variable selection using IntNMF
+
+```{r}
+pan_nmf <- mods_vs3$dat.list %>% purrr::map(
+  ., ~{
+    if(!all(. > 0)) {
+      # . <- scale(.)
+      m <- abs(min(.))
+      . <- pmax(. + m, 0)
+      as.matrix(./max(.))
+    }
+  }
+)
+
+k <- nmf.opt.k(pan_nmf, k.range = 2:12)
+fit <- nmf.mnnals(dat=pan_nmf, k=8, ini.nndsvd=F, seed=TRUE) # opt at cl = 8
+PAN_clinical_with_cluster_subtype_results$cluster_test_8 <- fit$clusters
+```
+
+# UMAP
+
+```{r}
+lab <- gsub("TCGA-", "", PAN_clinical$project_id)
+config <- umap::umap.defaults
+config$n_neighbors <- 30
+config$min_dist <- .6
+p1 <- plot_umap(fit$W, group = factor(fit$clusters), main = "NMF Embedding with NMF Cluster", cex = 0.75, config = config, pca = F, label_group = F)
+p2 <- plot_umap(fit$W, group = factor(lab), main = "NMF Embedding with Cancer Type", cex = 0.75, config = config, pca = F)
+p5 <- plot_umap(pan_atac_filtered, group = factor(lab), main = "ATAC-Seq", cex = 0.75, pca = T, config = config)
+p6 <- plot_umap(pan_tpm_filtered, group = factor(lab), pca = T, main = "RNA-Seq", cex = 0.75, config = config)
+ggpubr::ggarrange(
+  p1,p2,p5,p6,
+  nrow = 2,
+  ncol = 2
+)
+ggsave(file.path(dir.results, "PAN_umap.pdf"),
+       width = 15,
+       height = 10)
+```
+
+## Confusion mat
+
+```{r}
+pdf(file.path(dir.results, "nmf_confusion_mat.pdf"),
+    width = 6,
+    height = 6)
+tb <- table(fit$clusters,factor(PAN_clinical$project_id))
+rownames(tb) <- paste0("group", rownames(tb))
+pheatmap(t(tb[order(apply(tb, 1, which.max)), ]), 
+         color = colorRampPalette(c( "white", "brown"))(50), 
+         treeheight_row = 0, treeheight_col = 0,
+         display_numbers = T,
+         border_color = 'grey',
+         cluster_rows = F, cluster_cols = F,
+         number_format = "%.0f", legend = F, number_color = "black",
+         angle_col = "90", main = "NMF Groups")
+dev.off()
+```

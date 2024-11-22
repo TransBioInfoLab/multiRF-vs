@@ -1,0 +1,331 @@
+---
+title: "Data preprocessing for real case study"
+author: "Wei Zhang"
+date: "2024-04-17"
+output:
+  html_document:
+    highlight: pygments
+    theme: yeti
+    toc: true
+    number_sections: true
+    df_print: paged
+    code_download: false
+    toc_float:
+      collapsed: yes
+    toc_depth: 3
+editor_options:
+  chunk_output_type: inline    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+dir.base <- "../../.."
+dir.data <- file.path(dir.base, "data_processed/")
+
+library(tidyverse)
+```
+
+```{r}
+get_most_variable_gene <- function(exp, zero_thres = 0.2, top = 1000, transpose = T){
+  
+  exp_zero <- rowSums(exp == 0)/ncol(exp)
+  exp_filtered <- exp[exp_zero <= zero_thres,]
+  
+  if(nrow(exp_filtered) > top){
+    var <- apply(exp_filtered, 1, var)
+    order_var <- order(var, decreasing = T)[1:top]
+    exp_filtered <- exp_filtered[order_var,]
+  }
+
+  if(transpose){
+     exp_filtered <- exp_filtered %>% t() %>% as.data.frame()
+  }
+  
+  return(exp_filtered)
+}
+```
+
+```{r}
+read_all_gz_file <- function(dir.path){
+  
+  list_file <- list.files(dir.path,
+                          pattern = ".gz",
+                          full.names = T)
+  
+  l <- list_file %>% 
+    purrr::map(~data.table::fread(.,header = T)
+               %>% column_to_rownames("sample"))
+  
+  return(l)
+}
+```
+
+# Data prepare
+
+## BRCA
+
+```{r}
+cohort <- "BRCA"
+dir.data.raw <- file.path(dir.data, cohort, "raw/")
+dir.data.processed <- file.path(dir.data, cohort, "processed/")
+library(TCGAbiolinks)
+for(p in grep("^dir",ls(),value = T)) dir.create(get(p),recursive = TRUE,showWarnings = FALSE)
+```
+
+
+```{r}
+# Get brca
+tcga_brca <- read_all_gz_file(file.path(dir.data.raw, "sampleMap"))
+# tcga_brca <- tcga_brca %>% purrr::map(~column_to_rownames(.,"sample"))
+names(tcga_brca) <- c("gene", "methy", "mirna")
+
+tcga.clinical <- data.table::fread(
+  file.path(dir.data.raw, "TCGA.BRCA.sampleMap_BRCA_clinicalMatrix"),
+  header = T
+) %>% data.frame()
+
+tcga.survival <- data.table::fread(
+  file.path(dir.data.raw, "tcga-xena-hub.s3.us-east-1.amazonaws.com_download_survival%2FBRCA_survival.txt"),
+  header = T
+) %>% data.frame() %>%
+  dplyr::select(X_PATIENT, OS, OS.time, PFI, PFI.time) %>%
+  unique()
+tcga.clinical <- left_join(tcga.clinical, tcga.survival, by = "X_PATIENT")
+
+common.samples <-  dplyr::intersect(
+  dplyr::intersect(
+    dplyr::intersect(
+      colnames(tcga_brca$gene), colnames(tcga_brca$methy)
+    ), colnames(tcga_brca$mirna)
+  ), tcga.clinical$sampleID
+)
+```
+
+```{r}
+# Get common samples
+tcga_brca <- tcga_brca %>% purrr::map(~.[,common.samples])
+tcga_brca_clinical <- tcga.clinical[match(common.samples, tcga.clinical$sampleID),]
+# Remove all NAs
+nas <- apply(tcga_brca$mirna, 1, function(i) any(is.na(i)))
+tcga_brca$mirna <- tcga_brca$mirna[!nas,]
+# Remove non cg
+tcga_brca$methy <- tcga_brca$methy[grep("^cg", rownames(tcga_brca$methy)),]
+# Get most variable gene/mirna/methylation
+tcga_brca <- tcga_brca %>%
+  purrr::map(~get_most_variable_gene(., top = 2000))
+# log2 trans on RNAseq and miRNA
+tcga_brca$gene <- log2(tcga_brca$gene + 1)
+tcga_brca$mirna <- log2(tcga_brca$mirna + 1)
+```
+
+```{r}
+# Get PAM50
+pam50 <- read_csv(
+  file.path(dir.data.raw, "TCGA_BRCA_clinical_with_PAM50.csv")
+)
+tcga_brca_clinical <- left_join(tcga_brca_clinical, pam50, by = c("X_PATIENT" = "patient"))
+```
+
+
+```{R}
+save(
+  tcga_brca,
+  tcga_brca_clinical,
+  file = file.path(dir.data.processed, "BRCA_three_omics_top_2000.rda")
+)
+```
+
+```{r}
+gc()
+```
+
+## COAD
+
+```{r}
+cohort <- "COAD"
+dir.data.raw <- file.path(dir.data, cohort, "raw/")
+dir.data.processed <- file.path(dir.data, cohort, "processed/")
+for(p in grep("^dir",ls(),value = T)) dir.create(get(p),recursive = TRUE,showWarnings = FALSE)
+```
+
+```{r}
+tcga_coad <- read_all_gz_file(dir.data.raw)
+names(tcga_coad) <- c("gene", "methy", "mirna")
+```
+
+```{r}
+tcga.clinical <- data.table::fread(
+  file.path(dir.data.raw, "TCGA.COAD.sampleMap_COAD_clinicalMatrix"),
+  header = T
+) %>% data.frame()
+
+tcga.survival <- data.table::fread(
+  file.path(dir.data.raw, "tcga-xena-hub.s3.us-east-1.amazonaws.com_download_survival%2FCOAD_survival.txt"),
+  header = T
+) %>% data.frame() %>%
+  dplyr::select(X_PATIENT, OS, OS.time, PFI, PFI.time) %>%
+  unique()
+tcga.clinical <- left_join(tcga.clinical, tcga.survival, by = "X_PATIENT")
+
+common.samples <-  dplyr::intersect(
+  dplyr::intersect(
+    dplyr::intersect(
+      colnames(tcga_coad$gene), colnames(tcga_coad$methy)
+    ), colnames(tcga_coad$mirna)
+  ), tcga.clinical$sampleID
+)
+```
+
+```{r}
+# Get common samples
+tcga_coad_clinical <- tcga.clinical[match(common.samples, tcga.clinical$sampleID),]
+tcga_coad <- tcga_coad %>% purrr::map(~.[,common.samples])
+# Remove all NAs
+nas <- apply(tcga_coad$mirna, 1, function(i) any(is.na(i)))
+tcga_coad$mirna <- tcga_coad$mirna[!nas,]
+# Remove non cg
+tcga_coad$methy <- tcga_coad$methy[grep("^cg", rownames(tcga_coad$methy)),]
+```
+
+```{r}
+# Get most variable gene/mirna/methylation
+tcga_coad <- tcga_coad %>%
+  purrr::map(~get_most_variable_gene(., top = 2000))
+# log2 trans on RNAseq and miRNA
+tcga_coad$gene <- log2(tcga_coad$gene + 1)
+tcga_coad$mirna <- log2(tcga_coad$mirna + 1)
+```
+
+```{r}
+# Get subtype information
+coad_subtype <- data.table::fread(file.path(dir.data.raw, "cms_labels_public_all.txt"))
+tcga_coad_clinical <- left_join(tcga_coad_clinical, coad_subtype, by = c("X_PATIENT" = "sample"))
+```
+
+
+```{r}
+save(
+  tcga_coad,
+  tcga_coad_clinical,
+  file = file.path(dir.data.processed, paste0(cohort, "_three_omics_top_2000.rda"))
+)
+```
+
+## PANCAN
+
+```{r}
+library(TCGAbiolinks)
+```
+
+```{r}
+dir.data.raw <- file.path(dir.data, "PAN/raw")
+dir.data.processed <- file.path(dir.data, "PAN/processed")
+```
+
+```{r}
+all_atac <- data.table::fread(
+  file.path(dir.data.raw, "TCGA_ATAC_peak_Log2Counts_dedup_sample.gz")
+) %>% column_to_rownames("sample")
+head(all_atac)
+```
+
+```{r}
+sample_id <- colnames(all_atac)
+```
+
+```{r}
+clinical <- data.table::fread(
+  file.path(dir.data.raw, "GDC-PANCAN.basic_phenotype.tsv.gz")
+)
+clinical_pan <- clinical %>% filter(sample %in% sample_id)
+project <- unique(clinical_pan$project_id)
+```
+
+```{r}
+for(p in project){
+  
+  # query the data
+  query.exp.hg38 <- GDCquery(
+    project = p,
+    data.category = "Transcriptome Profiling", 
+    data.type = "Gene Expression Quantification", 
+    workflow.type = "STAR - Counts",
+    
+  )
+  
+  # download and save the data
+  GDCdownload(query.exp.hg38)
+  summarizedExperiment <- GDCprepare(
+    query = query.exp.hg38,
+    save = TRUE, 
+    save.filename = file.path(dir.data.raw, "TCGA", paste0(p,"_STAR_Counts.rda"))
+  )
+  
+}
+
+GE.all <- NULL
+for(p in project){
+  
+  print(p)
+  load(file.path(dir.data.raw, "TCGA", paste0(p,"_STAR_Counts.rda")))
+  
+  # get tpm data
+  tpm <- assay(data,"tpm_unstrand")
+  
+  GE <- tpm
+  
+  sample.name <- colData(data)$sample
+  
+  colnames(GE) <- sample.name
+  
+  rownames(GE) <- rowRanges(data)$gene_name
+  
+  GE.all <- cbind(GE.all, GE)
+}
+
+clinical <- plyr::llply(project,.fun = function(proj){
+  d <- TCGAbiolinks::GDCquery_clinic(project = proj)
+  d <- d %>% subset(!duplicated(submitter_id))
+  d
+})
+clinical <- bind_rows(clinical, .id = NULL)
+```
+
+```{r}
+common_id <- intersect(colnames(GE.all), sample_id)
+PAN_tpm <- GE.all[,common_id]
+PAN_atac <- all_atac[,common_id]
+PAN_clinical <- clinical_pan[match(common_id, clinical_pan$sample),]
+rownames(PAN_clinical) <- PAN_clinical$sample
+```
+
+```{r}
+ref <- data@rowRanges %>% data.frame()
+# keep duplicated genes with largest variance
+expVar <- matrixStats::rowIQRs(as.matrix(PAN_tpm))
+genes <- ref$gene_name
+gene_keep <- plyr::laply(
+  unique(genes),
+  .fun = function(e) {
+    stats <- expVar[e]
+    names(stats)[which.max(stats)]
+  }
+)
+
+PAN_tpm <- PAN_tpm[gene_keep,]
+ref2 <- ref[match(gene_keep, ref$gene_name),]
+
+# Filter out chromosome chrM
+ref2 <-  ref2[ref2$seqnames != "chrM",]
+PAN_tpm <- PAN_tpm[ref2$gene_name,]
+```
+
+```{r}
+save(
+  PAN_tpm,
+  PAN_atac,
+  PAN_clinical,
+  ref2,
+  file = file.path(dir.data.processed, "PAN_tpm_atac_clinical.rda")
+)
+```
