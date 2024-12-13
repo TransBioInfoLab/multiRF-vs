@@ -8,8 +8,6 @@ This repo contains code associated with the manuscript, our method enhanced the 
 
 High-throughput technologies now produce a wide array of omics data, from genomic and transcriptomic profiles to epigenomic and proteomic measurements. Integrating these diverse data types can yield deeper insights into the biological mechanisms driving complex traits and diseases. Yet, extracting key shared biomarkers from multiple data layers remains a major challenge. We present a multivariate random forest (MRF)–based framework enhanced by a novel inverse minimal depth (IMD) metric for integrative variable selection. By assigning response variables to tree nodes and employing IMD to rank predictors, our approach efficiently identifies essential features across different omics types, even when confronted with high-dimensionality and noise. Through extensive simulations and analyses of multi-omics datasets from The Cancer Genome Atlas, we demonstrate that our method outperforms established integrative techniques in uncovering biologically meaningful biomarkers and pathways. Our findings show that selected biomarkers not only correlate with known regulatory and signaling networks but can also stratify patient subgroups with distinct clinical outcomes. The method’s scalable, interpretable, and user-friendly implementation ensures broad applicability to a range of research questions. This MRF-based framework advances robust biomarker discovery and integrative multi-omics analyses, accelerating the translation of complex molecular data into tangible biological and clinical insights. 
 
-![](/Users/weizhang/TBL Dropbox/Wei Zhang/mrf/paper1/draft/MRFVS_word_v2/Graphical abstract.png)
-
 ### Code Directory
 
 **Method**
