@@ -1,5 +1,5 @@
 # multiRF-variable-selection
-## Enhanced Multi-omics Integration via Multivariate Random Forests for Robust Biomarker Discovery
+## An Integrative Multi-Omics Random Forest Framework for Robust Biomarker Discovery
 
 Wei Zhang, Hanchen Huang, Lily Wang, Brian D. Lehmann, Steven X. Chen
 
@@ -30,6 +30,7 @@ The rapid advancement of high-throughput omics technologies has led to an explos
 - `data_prepare.Rmd`: Data preprocessing
 - `$DATA$.R`: Performs model fitting for real data analysis on each TCGA data
 - `real_data_analysis.Rmd`: Contains figures generated for the manuscript
+
 
 ### For Reproducible Research
 
