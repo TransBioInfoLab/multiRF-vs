@@ -1,4 +1,4 @@
-## An Integrative Multi-Omics Random Forest Framework for Robust Biomarker Discovery
+# An Integrative Multi-Omics Random Forest Framework for Robust Biomarker Discovery
 
 Wei Zhang, Hanchen Huang, Lily Wang, Brian D. Lehmann, Steven X. Chen
 
