@@ -21,9 +21,6 @@
 #' @export
 #' @import randomForestSRC
 #'
-#' @examples
-#' data(tcga_brca)
-#' mod <- mrf3_init(tcga_brca)
 #'
 # ---------------------------------------------------------------------------------
 # Wrapper function for mrf direct variable selection
