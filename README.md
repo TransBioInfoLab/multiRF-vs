@@ -1,4 +1,3 @@
-# multiRF-variable-selection
 ## An Integrative Multi-Omics Random Forest Framework for Robust Biomarker Discovery
 
 Wei Zhang, Hanchen Huang, Lily Wang, Brian D. Lehmann, Steven X. Chen
@@ -7,7 +6,9 @@ This repo contains code associated with the manuscript, our method enhanced the 
 
 ### Abstract
 
-The rapid advancement of high-throughput omics technologies has led to an explosion of multi-dimensional biological data. Integrating these diverse data types holds the potential to uncover novel insights into complex biological systems. However, identifying shared and relevant variables across different omics datasets remains a significant challenge. Here, we propose a novel approach using multivariate random forests to perform variable selection across multiple omics datasets. Our method, which leverages both maximal splitting response variable (MSRV) and inverse minimal depth (IMD), effectively identifies key variables by reducing dimensionality while maintaining predictive power. We demonstrate its superiority over traditional methods like sparse partial least squares (sPLS) and canonical correlation analysis (CCA) through comprehensive simulations and real-world multi-omics data. Our results show that the proposed method can robustly detect biologically relevant features, even in high-dimensional, noisy datasets. This tool offers a scalable, interpretable, and accurate framework for multi-omics data integration, with wide applications in biomarker discovery and disease prediction.
+High-throughput technologies now produce a wide array of omics data, from genomic and transcriptomic profiles to epigenomic and proteomic measurements. Integrating these diverse data types can yield deeper insights into the biological mechanisms driving complex traits and diseases. Yet, extracting key shared biomarkers from multiple data layers remains a major challenge. We present a multivariate random forest (MRF)–based framework enhanced by a novel inverse minimal depth (IMD) metric for integrative variable selection. By assigning response variables to tree nodes and employing IMD to rank predictors, our approach efficiently identifies essential features across different omics types, even when confronted with high-dimensionality and noise. Through extensive simulations and analyses of multi-omics datasets from The Cancer Genome Atlas, we demonstrate that our method outperforms established integrative techniques in uncovering biologically meaningful biomarkers and pathways. Our findings show that selected biomarkers not only correlate with known regulatory and signaling networks but can also stratify patient subgroups with distinct clinical outcomes. The method’s scalable, interpretable, and user-friendly implementation ensures broad applicability to a range of research questions. This MRF-based framework advances robust biomarker discovery and integrative multi-omics analyses, accelerating the translation of complex molecular data into tangible biological and clinical insights. 
+
+![](/Users/weizhang/TBL Dropbox/Wei Zhang/mrf/paper1/draft/MRFVS_word_v2/Graphical abstract.png)
 
 ### Code Directory
 
@@ -27,16 +28,20 @@ The rapid advancement of high-throughput omics technologies has led to an explos
 
 **Real data analysis**
 
-- `data_prepare.Rmd`: Data preprocessing
+- `data_prepare.Rmd`: TCGA data preprocessing
 - `$DATA$.R`: Performs model fitting for real data analysis on each TCGA data
 - `real_data_analysis.Rmd`: Contains figures generated for the manuscript
+
+### Instruction
+
+To conduct MRF multi-omics variable selection using the method described in the manuscript, 
 
 
 ### For Reproducible Research
 
 Install all the R packages from the `load_package.R` file and source all the scripts in the `code/function` folder.
 
-```
+```R
 ─ Session info ───────────────────────────────────────────────
  setting  value
  version  R version 4.4.2 (2024-10-31)
