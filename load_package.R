@@ -30,6 +30,7 @@ list.of.packages <- c(
   "glmnet",
   "ggplot2",
   "ggpubr",
+  "InterSIM",
   "janitor",
   "MASS",
   "matrixStats",
@@ -59,3 +60,7 @@ if(length(new.packages)){
     } else BiocManager::install(new)
   }
 } 
+
+for (pkg in list.of.packages) {
+  library(pkg,character.only = TRUE)
+}

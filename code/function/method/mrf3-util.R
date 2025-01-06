@@ -82,6 +82,61 @@ get_tree_net <- function(mod, tree.id){
 
 }
 
+# Get leaf node information
+get_leaf_ds <- function(mod, tree.membership, net){
+  
+  # Find upper level node
+  prev_leaf <- dplyr::filter(.data = net, is_leaf == 1)
+  
+  # Update mem_id and membership
+  net$mem_id_old <- net$mem_id
+  mem_update <- slice_max(.data = prev_leaf, order_by = mem_id, by = from, with_ties = F)
+  mem_old <- slice_min(.data = prev_leaf, order_by = mem_id, by = from, with_ties = F)
+  mem_new <- setNames(mem_update$mem_id, mem_update$from)
+  mem_org_id <- mem_old$mem_id
+  names(mem_org_id) <- mem_new
+  sapply(1:nrow(mem_old), function(id) net$mem_id[net$mem_id == mem_org_id[id]] <<- as.numeric(names(mem_org_id)[id]))
+  
+  find_node <- unique(prev_leaf$from)
+  
+  leaf_select <- filter(net, to %in% find_node)
+  map_id <- unique(leaf_select$from)
+  
+  leaf_select <- filter(net, from %in% map_id)
+  leaf_select$mem_id[match(names(mem_new), leaf_select$to)] <- mem_new
+  drop_leaf <- leaf_select$from[leaf_select$mem_id == 0]
+  leaf_select <- leaf_select[!leaf_select$from %in% drop_leaf,]
+  
+  # Update leaf information
+  
+  net$is_leaf[net$to %in% prev_leaf$to] <- 0
+  net$is_leaf[net$from %in% leaf_select$from] <- 1
+  
+  net$mem_id[match(names(mem_new), net$to)] <- mem_new
+  
+  tree_mem <- tree.membership
+  
+  sapply(1:length(mem_org_id),
+         function(id){
+           tree_mem[tree_mem == mem_org_id[id]] <<-
+             as.numeric(names(mem_org_id)[id])
+         })
+  
+  
+  if(any(leaf_select$mem_id %in% 0)) {
+    from_id <- leaf_select[leaf_select$mem_id %in% 0,"from"]
+    leaf_select[leaf_select$from %in% from_id,"is_leaf"] <- 0
+    leaf_drop <- leaf_select[leaf_select$is_leaf == 0,]
+    net[net$to %in% leaf_drop$to,"is_leaf"] <- 0
+    net[net$to %in% leaf_drop$to,"leaf_stack"] <- 1
+  }
+  
+  return(
+    list(net = net,
+         tree.mem = tree_mem)
+  )
+}
+
 # Get response outcome splitting scores for splits in a tree
 get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1){
 
