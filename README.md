@@ -32,7 +32,7 @@ High-throughput technologies now produce a wide array of omics data, from genomi
 
 ### Instruction
 
-For instructions on performing MRF multi-omics variable selection as described in the manuscript, a detailed vignette can be found here: (Link)[http://rpubs.com/noblegasss/multiRF-vs-vignette]
+For instructions on performing MRF multi-omics variable selection as described in the manuscript, a detailed vignette can be found here: [[Link](http://rpubs.com/noblegasss/multiRF-vs-vignette)]
 
 
 ### For Reproducible Research
