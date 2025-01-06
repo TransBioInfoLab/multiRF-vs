@@ -127,13 +127,13 @@ The variable selection for different omics data can be conducted using `mrf3_vs(
 - **`"mixture"`**: Detecting signals with mixture model. The adjustable parameters are `c1`, which specifies the prior distribution of the first component (options: "normal" or "truncn"), and `c2`, which specifies the prior distribution of the second component (options: "normal" or "gamma").
 - **`"test"`**: IMD transformation. The adjustable parameter `level` specifies the significance level for selecting important variables. The default value is 0.05.
 
-In this example, we used the filtering method for illustration.
+In this example, we used the mixture model method for illustration.
 
 ```{r}
 mod_vs <- mrf3_vs(
   mod = mod,
   dat.list = dat_list,
-  method = "filter"
+  method = "mixture"
 )
 ```
 
