@@ -59,6 +59,8 @@ For instructions on performing MRF multi-omics variable selection as described i
 
 Install all the R packages from the `load_package.R` file and source all the scripts in the `code/function` folder.
 
+License: GPL-3.0
+
 ```R
 ─ Session info ───────────────────────────────────────────────
  setting  value
