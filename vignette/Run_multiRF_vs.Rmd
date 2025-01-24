@@ -2,6 +2,7 @@
 title: "Multi-omics variable selection using MRF framework"
 author: 
   - Wei Zhang^[University of Miami]
+  - Xi Steven Cheng^[University of Miami]
 date: "`r Sys.Date()`"
 output:
   rmarkdown::html_document:
@@ -209,7 +210,9 @@ ggpubr::ggarrange(g1,g2,g3, nrow = 1, ncol = 3)
 
 We observe that the Adjusted Rand Index (ARI) improves significantly when using the selected variables, indicating better clustering performance.
 
-# Seesion information
+# Session information
+
+License: GPL-3.0
 
 <details>
 ```{r}
