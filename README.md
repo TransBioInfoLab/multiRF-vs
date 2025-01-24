@@ -36,6 +36,9 @@ For instructions on performing MRF multi-omics variable selection as described i
 
 ### Data Accessibility
 
+- RNAseq datasets: from R package TCGAbiolinks
+- Others: from UCSC Xena: [https://xena.ucsc.edu/]([https://xena.ucsc.edu/)
+
 | Dataset   | Data Type       | Link                                                         |
 | --------- | --------------- | ------------------------------------------------------------ |
 | TCGA-BRCA | Gene Expression | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FHiSeqV2&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
