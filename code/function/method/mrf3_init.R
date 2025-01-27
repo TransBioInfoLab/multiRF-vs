@@ -41,6 +41,7 @@ mrf3_init <- function(dat.list,
                  parallel = T,
                  return_data = F,
                  cores = detectCores() - 2,
+                 seed = 529,
                  ...){
 
   if(length(dat.list) == 1) type = "unsupervised"
@@ -49,7 +50,7 @@ mrf3_init <- function(dat.list,
   # Find connection
   if(is.null(connect_list) & length(dat.list) > 1){
     message("Finding maximum connections..")
-    connection <- findConnection(dat.list = dat.list, var_prop = var_prop, direct = direct, keep_prop = keep_prop)
+    connection <- findConnection(dat.list = dat.list, var_prop = var_prop, direct = direct, keep_prop = keep_prop, seed = seed)
     connect_list <- stringr::str_split(connection, "_")
   }
   if(length(dat.list) == 1){
@@ -65,7 +66,7 @@ mrf3_init <- function(dat.list,
 
   message("Fitting models..")
 
-  mod_list <- fit_multi_rfsrc(new_dat, connect_list = connect_list, ntree = ntree, type = type, yprob = yprob,...)
+  mod_list <- fit_multi_rfsrc(new_dat, connect_list = connect_list, ntree = ntree, type = type, yprob = yprob, seed = seed,...)
   oob_err <- purrr::map(mod_list, ~get_r_sq(.))
   oob_err <- Reduce("+", oob_err)
 
@@ -85,6 +86,7 @@ mrf3_init <- function(dat.list,
                                          yprob = yprob,
                                          use_depth = use_depth,
                                          cores = cores,
+                                         seed = seed, 
                                          ...)
   multi_weights <- multi_weights_mod$weight_list
 

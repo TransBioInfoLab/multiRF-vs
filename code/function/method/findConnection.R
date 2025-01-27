@@ -14,13 +14,13 @@
 # ---------------------------------------------------------------------------------
 # Find optimal connections among multi-omics data
 # ---------------------------------------------------------------------------------
-findConnection <- function(dat.list, var_prop = .6, keep_prop = NULL, return_score = F, direct = T, ...){
+findConnection <- function(dat.list, var_prop = .6, keep_prop = NULL, return_score = F, direct = T, seed = -5, ...){
 
   # # Create dimension reduction matrices
   reduced_list <- purrr::map(dat.list, ~getEmbed(., var_prop = var_prop))
 
   # Fit full connection model
-  mod <- fullConnect(reduced_list, ...)
+  mod <- fullConnect(reduced_list, seed = seed, ...)
 
   # Get oob error
   oob_err <- plyr::laply(
@@ -74,7 +74,7 @@ findConnection <- function(dat.list, var_prop = .6, keep_prop = NULL, return_sco
 #' @rdname findConnection
 #' @inheritParams randomForestSRC::rfsrc
 
-fullConnect <- function(dat.list, ...){
+fullConnect <- function(dat.list, seed = seed, ...){
 
   dat_names <- names(dat.list)
   mod_l <- plyr::llply(
@@ -84,7 +84,7 @@ fullConnect <- function(dat.list, ...){
       predict_d <- dat.list[!names(dat.list) %in% d]
 
       mod <- plyr::llply(predict_d, .fun = function(pred){
-        fit_rfsrc(X = pred, Y = response_d, ...)
+        fit_rfsrc(X = pred, Y = response_d, seed = seed, ...)
       })
 
       mod_names <- paste0(d, "_", names(predict_d))

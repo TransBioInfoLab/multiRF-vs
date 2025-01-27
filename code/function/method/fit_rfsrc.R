@@ -16,7 +16,8 @@
 #'
 #'
 fit_rfsrc <-  function(X, Y = NULL, type = "regression", nodedepth = NULL,
-                       ntree = 200, forest.wt = "all", proximity = "all", ytry = NULL, ...){
+                       ntree = 200, forest.wt = "all", proximity = "all", ytry = NULL, 
+                       seed = -10, ...){
 
   X <- data.frame(X)
 
@@ -33,6 +34,7 @@ fit_rfsrc <-  function(X, Y = NULL, type = "regression", nodedepth = NULL,
       na.action = "na.impute",
       statistics = T,
       proximity = proximity,
+      seed = seed,
       ...
     )
   }
@@ -53,6 +55,7 @@ fit_rfsrc <-  function(X, Y = NULL, type = "regression", nodedepth = NULL,
       statistics = T,
       proximity = proximity,
       ytry = ytry,
+      seed = seed,
       ...
     )
 
@@ -71,6 +74,7 @@ fit_rfsrc <-  function(X, Y = NULL, type = "regression", nodedepth = NULL,
       statistics = T,
       proximity = proximity,
       ytry = ytry,
+      seed = seed,
       ...
     )
   }
@@ -85,11 +89,11 @@ fit_rfsrc <-  function(X, Y = NULL, type = "regression", nodedepth = NULL,
 #' If not provided, the algorithm will find the optimal connection between datasets.
 #' @rdname fit_rfsrc
 #'
-fit_multi_rfsrc <- function(dat.list, connect_list = NULL, var.wt = NULL, yprob = 1, ...){
+fit_multi_rfsrc <- function(dat.list, connect_list = NULL, var.wt = NULL, yprob = 1, seed = -10, ...){
 
   if(is.null(connect_list)){
 
-    mod_l <- fullConnect(dat.list, ...)
+    mod_l <- fullConnect(dat.list, seed = seed, ...)
 
   } else {
 
@@ -107,7 +111,7 @@ fit_multi_rfsrc <- function(dat.list, connect_list = NULL, var.wt = NULL, yprob 
         if(length(dat_fit) == 1){
 
           ytry <- min(ceiling(ncol(dat_fit[[1]]) * yprob), 20)
-          mod <- fit_rfsrc(dat_fit[[1]], xvar.wt = varwt[[1]], ytry = ytry, ...)
+          mod <- fit_rfsrc(dat_fit[[1]], xvar.wt = varwt[[1]], ytry = ytry, seed = seed, ...)
         } else {
 
           if(is.null(varwt)) {
@@ -118,7 +122,7 @@ fit_multi_rfsrc <- function(dat.list, connect_list = NULL, var.wt = NULL, yprob 
 
           if(ytry == ncol(dat_fit[[1]])) ytry <- NULL
 
-          mod <- fit_rfsrc(dat_fit[[2]], dat_fit[[1]], xvar.wt = varwt[[2]], yvar.wt = varwt[[1]], ytry = ytry, ...)
+          mod <- fit_rfsrc(dat_fit[[2]], dat_fit[[1]], xvar.wt = varwt[[2]], yvar.wt = varwt[[1]], ytry = ytry, seed = seed, ...)
         }
 
 

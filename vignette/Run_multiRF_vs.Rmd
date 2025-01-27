@@ -2,7 +2,7 @@
 title: "Multi-omics variable selection using MRF framework"
 author: 
   - Wei Zhang^[University of Miami]
-  - Xi Steven Cheng^[University of Miami]
+  - Xi Steven Chen^[University of Miami]
 date: "`r Sys.Date()`"
 output:
   rmarkdown::html_document:

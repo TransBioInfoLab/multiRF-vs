@@ -138,7 +138,7 @@ get_leaf_ds <- function(mod, tree.membership, net){
 }
 
 # Get response outcome splitting scores for splits in a tree
-get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1){
+get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1, seed = -5){
 
   node_id <- unique(net$from)
   var_imp <- llply(
@@ -166,10 +166,12 @@ get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1){
       if(!is.null(w)) {
         ns <- min(ceiling(length(split_stat)*yprob), length(w[w != 0]))
         w <- w/sum(w)
+        set.seed(seed)
         samp0 <- sample.int(length(split_stat), ns, prob = w)
         samp0 <- (1:length(split_stat))[-samp0]
         samp[samp0] <- 0
       } else {
+        set.seed(seed)
         samp0 <- sample.int(length(split_stat), ceiling(length(split_stat)/3))
         samp[samp0] <- 0
       }
@@ -188,7 +190,7 @@ get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1){
 }
 
 # Get importance for leaves in a tree
-get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w = NULL, yprob = 1, weighted = F){
+get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w = NULL, yprob = 1, weighted = F, seed = -5){
 
   if(is.null(dat)){
     dat <- mod$xvar
@@ -230,7 +232,7 @@ get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w
 
   if(calc %in% c("Both", "Y")){
     # Get Y
-    impY <- get_Y_imp(net = match_old_net, tree.membership = tree.membership, dat = datY, w = w, yprob = yprob)
+    impY <- get_Y_imp(net = match_old_net, tree.membership = tree.membership, dat = datY, w = w, yprob = yprob, seed = seed)
     updated_net$Y_id[unique(match(match_old_net$from, updated_net$from))] <- names(impY)
     scores_impY <- updated_net$inv_d[match(unique(match_old_net$from), updated_net$from)]
     if(weighted) {
@@ -261,7 +263,7 @@ get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w
 }
 
 # Update tree importance from bottom to top
-update_iter_imp <- function(mod, tree.id, calc = "Both", lambda, w = NULL, yprob = 1, weighted = F) {
+update_iter_imp <- function(mod, tree.id, calc = "Both", lambda, w = NULL, yprob = 1, weighted = F, seed = -5) {
 
   # Get the tree structure for the specified tree.id
   net <- get_tree_net(mod = mod, tree.id = tree.id)
@@ -319,7 +321,8 @@ update_iter_imp <- function(mod, tree.id, calc = "Both", lambda, w = NULL, yprob
       calc = calc,
       w = w,
       yprob = yprob,
-      weighted = weighted
+      weighted = weighted,
+      seed = seed
     )
 
     # Update 'net', 'mem', and 'dat' with the results from 'update_ls'
@@ -433,7 +436,7 @@ add_lambda <- function(imp_ls, net, x_freq, lambda){
 #' @rdname get_imp_forest
 #' @export
 
-get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_depth = F, normalized = F, lambda = 1, w = NULL, yprob = 1, cores = detectCores() - 2){
+get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_depth = F, normalized = F, lambda = 1, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
 
   nt <- mod$ntree
 
@@ -459,7 +462,8 @@ get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_d
                                          lambda = lambda,
                                          yprob = yprob,
                                          w = w,
-                                         weighted = weighted)
+                                         weighted = weighted,
+                                         seed = seed)
                        }, .parallel = parallel)
 
     imp <- purrr::map(results, "imp_ls")
@@ -514,7 +518,7 @@ get_iv <- function(var_name, imp){
 
 get_multi_weights <- function(mod_list, dat.list, y = NULL, weighted = F, lambda = 1, use_depth = F,
                               parallel = T, normalized = T, calc = "Both", yprob = 1,
-                              w = NULL, cores = max(detectCores() - 2,20), ...){
+                              w = NULL, cores = max(detectCores() - 2,20), seed = -5,  ...){
 
   mod_names <- names(mod_list)
   if(length(lambda) == 1) {
@@ -523,7 +527,7 @@ get_multi_weights <- function(mod_list, dat.list, y = NULL, weighted = F, lambda
   }
 
   results <- get_results(mod_list = mod_list, parallel = parallel, weighted = weighted, normalized = F, use_depth = use_depth,
-                         calc = calc, lambda = lambda, w = w, cores = cores, yprob = yprob)
+                         calc = calc, lambda = lambda, w = w, cores = cores, yprob = yprob, seed = seed)
 
   net <- purrr::map(results, "net")
   weight_l <- purrr::map(results, "wl")
@@ -678,7 +682,7 @@ step_two_weight <- function(two_step, rm_noise, normalized, weight_l, dat.list, 
   weight_list
 }
 
-get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_depth = F, calc, lambda, w = NULL, yprob = 1, cores = detectCores() - 2){
+get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_depth = F, calc, lambda, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
 
   mod_names <- names(mod_list)
   plyr::llply(
@@ -690,7 +694,9 @@ get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_de
       if(!is.null(w)) {
         w0 <- w[[gsub("_.*", "", m_name)]]
       } else {w0 <- NULL}
-      results <- get_imp_forest(mod, parallel = parallel, normalized = normalized, weighted = weighted, calc = calc, lambda = l, w = w0, yprob = yprob, cores = cores, use_depth = use_depth)
+      results <- get_imp_forest(mod, parallel = parallel, normalized = normalized, 
+                                weighted = weighted, calc = calc, lambda = l, w = w0, 
+                                yprob = yprob, cores = cores, use_depth = use_depth, seed = seed)
       wl <- results$imp_ls
       wl_init <- results$imp_ls_init
       net <- results$net
