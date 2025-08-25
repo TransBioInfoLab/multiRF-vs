@@ -1,9 +1,9 @@
-dir.base <- "~/TBL Dropbox/Wei Zhang/mrf/"
-dir.data <- file.path(dir.base, "data_processed/PAN/")
+dir.base <- "."
+dir.data <- file.path(dir.base, "$data path$")
 dir.data.processed <- file.path(dir.data, "processed")
 dir.results <- file.path(dir.base, "data_results/PAN")
 # --------------------------------------------------------------------------------------------------------------------------
-library(multiRF)
+# library(multiRF)
 library(SummarizedExperiment)
 library(tidyverse)
 library(IntNMF)

@@ -218,9 +218,9 @@ plot_circos <- function(mat, names.list, group = NULL, cut.off = NULL, highlight
 
   if(!is.null(cut.off)){
     vimp[vimp <= cut.off] <- 0
-    vimp <- vimp[ rowSums(vimp) != 0 ,]
-    vimp <- vimp[, colnames(vimp) %in% rownames(vimp) ]
-    names.list <- lapply(names.list, function(l) l[l %in% colnames(vimp)])
+    # vimp <- vimp[ rowSums(vimp) != 0 ,]
+    # vimp <- vimp[, colnames(vimp) %in% rownames(vimp) ]
+    # names.list <- lapply(names.list, function(l) l[l %in% colnames(vimp)])
   }
 
   # Circular Network Diagram Plot
@@ -230,12 +230,18 @@ plot_circos <- function(mat, names.list, group = NULL, cut.off = NULL, highlight
   }
   )
 
+  col_mat <- vimp
+  col_mat[col_mat > 1e-05] <- 2
+  col_mat[col_mat == 1e-05] <- "#FFFFFF00"
+  col_mat[col_mat < 1e-05] <- 3
 
-  circos <- chordDiagram(vimp, annotationTrack = "grid",
+  circos <- chordDiagram(vimp + 1e-05, annotationTrack = "grid",
                          group = unlist(group.list),
                          preAllocateTracks = list(
                            track.height = mm_h(4),
                            track.margin = c(mm_h(4), 0),
+                           symmetric = T,
+                           col = col_mat,
                            ...)
   )
 
@@ -299,40 +305,44 @@ plot_embed <- function(dat, group = NULL, position = "bottom", pch = 20, ...){
 
 #' @export
 #' @rdname plot_tSNE
-plot_umap <- function(dat, group = NULL, main = "UMAP", label_group = T,
-                      pca = T, ncomp = 70, position = "right", pch = 20, config = umap::umap.defaults,  method = "umap-learn",...){
+plot_umap <- function(dat, group = NULL, group2 = NULL, main = "UMAP", label_group = T,
+                      position = "right", seed = 1080,...){
 
-  if(pca) {
-    x <- prcomp(dat)$x[,1:ncomp]
-  } else {
-    x <- dat
-  }
-
-  t <- umap::umap(x, config = config, method = method)
+  set.seed(seed)
+  t <- uwot::umap(dat, ...)
 
   if(is.null(group)) group <- rep("black", nrow(dat))
-
-  df <- data.frame(umap1 = t$layout[,1], umap2 = t$layout[,2], group = group)
+  
+  df <- data.frame(umap1 = t[,1], umap2 = t[,2], group = group)
+  if(!is.null(group2)) df$group2 <- group2
+  
   df <- na.omit(df)
 
   p1 <- ggplot(df, aes(umap1, umap2)) +
-    geom_point(aes(color = group), size = .5) +
+    geom_point(aes(color = group), size = 1) +
     xlab("UMAP1") +
     ylab("UMAP2") +
     ggtitle(main) +
     theme_classic()
 
   if(length(unique(group)) == 1) {
-    p1 <- p1 + guides(color = "none")
+    p1 <- p1
   } else {
     p1 <- p1 +
       ggsci::scale_color_igv() +
-      guides(color = guide_legend(override.aes = list(size=3))) +
+      guides(color = guide_legend("PAN-Cancer Types", override.aes = list(size=3))) +
       theme(legend.position = position,
-            legend.title = element_blank(),
-            legend.text = element_text(size = 6))
+            legend.title = element_text(size = 12, face = "bold"),
+            legend.text = element_text(size = 10),
+            title = element_text(size = 12, face = "bold"))
   }
-
+  
+  if(!is.null(group2)) {
+    p1 <- p1 + 
+      geom_point(aes(shape = group2)) +
+      scale_shape_manual("NMF Clusters", values=1:nlevels(df$group2)) 
+  }
+  
   if(label_group & length(unique(group)) != 1) {
     data2 <- df %>%
       group_by(group) %>%
@@ -341,8 +351,8 @@ plot_umap <- function(dat, group = NULL, main = "UMAP", label_group = T,
 
     p1 <- p1 +
       ggrepel::geom_text_repel(data = data2, aes(label = group),
-                               size = 2.5, color = "grey20",
-                               max.overlaps = 15)
+                               size = 3.5, color = "red",
+                               max.overlaps = 20)
   }
 
 
@@ -350,4 +360,50 @@ plot_umap <- function(dat, group = NULL, main = "UMAP", label_group = T,
 
 
 
+}
+
+# KM plot
+KM_plot <- function(test_var, time_var, event_var, pheno_mat, cut = "median", ...){
+  
+  if(is.numeric(test_var)){
+    
+    if(cut == "median"){
+      m <- median(test_var)
+    }
+    
+    if(cut == "mean"){
+      m <- mean(test_var)
+    }
+    
+    if(cut == "maxstat"){
+      
+      df <- data.frame(cluster = test_var, time = pheno_mat[[time_var]], death = pheno_mat[[event_var]])
+      m <- maxstat::maxstat.test(Surv(time, death) ~ cluster, data = df, smethod = "LogRank")$estimate
+      
+    }
+    gene_cut <- ifelse(test_var < m, "low", "high")
+    
+  } else {
+    
+    gene_cut = test_var
+    
+  }
+  
+  df <- data.frame(cluster = gene_cut, time = pheno_mat[[time_var]], death = pheno_mat[[event_var]])
+  
+  fo <- as.formula(paste0("Surv(time, death) ~ cluster"))
+  fit <- surv_fit(fo, data = df)
+  p <- round(-log10(survdiff(fo, data = df)$p),4)
+  
+  survminer::ggsurvplot(
+    fit,
+    data = df,
+    size = 1,
+    palette = "npg",
+    conf.int = F,
+    pval = T,
+    risk.table = F,
+    xlab = "Time (Days)",
+    ...
+  )
 }

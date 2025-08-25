@@ -170,11 +170,12 @@ get_Y_imp <- function(net, tree.membership, dat, w = NULL, yprob = 1, seed = -5)
         samp0 <- sample.int(length(split_stat), ns, prob = w)
         samp0 <- (1:length(split_stat))[-samp0]
         samp[samp0] <- 0
-      } else {
-        set.seed(seed)
-        samp0 <- sample.int(length(split_stat), ceiling(length(split_stat)/3))
-        samp[samp0] <- 0
       }
+      # } else {
+      #   set.seed(seed)
+      #   samp0 <- sample.int(length(split_stat), ceiling(length(split_stat)/3))
+      #   samp[samp0] <- 0
+      # }
      
       idx <- which.max(split_stat * samp)
       varY <- mean(split_stat)
@@ -222,12 +223,14 @@ get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w
   # Get X
   if(calc %in% c("Both", "X")){
     imp_var <- top_node_info[match(use_sample, top_node_info$from),"from"]
-    scores_imp <- (old_net_corr$inv_d)
+    sub_net <- old_net_corr[match(unique(match_old_net$from), old_net_corr$from),]
+    scores_imp <- (sub_net$inv_d)
     if(weighted) {
       scores_imp <- scores_imp * old_net_corr$edge
     }
+    
     # scores_imp <- drop_case[match(imp_var,drop_case$to),] %>% pull(corr)
-    names(scores_imp) <- gsub("^(.*)_.*", "\\1",imp_var)
+    names(scores_imp) <- gsub("^(.*)_.*", "\\1",imp_var[match(sub_net$from, imp_var)])
   }
 
   if(calc %in% c("Both", "Y")){
@@ -263,7 +266,7 @@ get_tree_imp <- function(mod, dat = NULL, tree.membership, net, calc = "Both", w
 }
 
 # Update tree importance from bottom to top
-update_iter_imp <- function(mod, tree.id, calc = "Both", lambda, w = NULL, yprob = 1, weighted = F, seed = -5) {
+update_iter_imp <- function(mod, tree.id, alpha = 1, calc = "Both", lambda, w = NULL, yprob = 1, weighted = F, seed = -5) {
 
   # Get the tree structure for the specified tree.id
   net <- get_tree_net(mod = mod, tree.id = tree.id)
@@ -377,7 +380,7 @@ update_iter_imp <- function(mod, tree.id, calc = "Both", lambda, w = NULL, yprob
   imp_col <- plyr::llply(
     1:length(imp_ls),
     .fun = function(l) {
-      get_iv(var_name[[l]], imp_ls[[l]])
+      get_iv(var_name[[l]], imp_ls[[l]], alpha = alpha)
     }
   )
 
@@ -436,7 +439,7 @@ add_lambda <- function(imp_ls, net, x_freq, lambda){
 #' @rdname get_imp_forest
 #' @export
 
-get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_depth = F, normalized = F, lambda = 1, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
+get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_depth = F, normalized = F, lambda = 1, alpha = 1, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
 
   nt <- mod$ntree
 
@@ -459,6 +462,7 @@ get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_d
                          update_iter_imp(mod,
                                          tree.id = t,
                                          calc = cc,
+                                         alpha = alpha,
                                          lambda = lambda,
                                          yprob = yprob,
                                          w = w,
@@ -498,7 +502,7 @@ get_imp_forest <- function(mod, parallel = T, calc = "Both", weighted = F, use_d
 }
 
 # Match importance name to column name of the data frame
-get_iv <- function(var_name, imp){
+get_iv <- function(var_name, imp, alpha = 1){
 
   imp_df <- data.frame(var_name = names(imp), importance = imp)
   imp_df <- dplyr::group_by(.data = imp_df,var_name)
@@ -508,7 +512,7 @@ get_iv <- function(var_name, imp){
   names(var_v) <- var_name
   var_v[imp_df$var_name] <- imp_df$importance
 
-  return(var_v)
+  return(var_v^alpha)
 
 }
 
@@ -517,6 +521,7 @@ get_iv <- function(var_name, imp){
 #' @export
 
 get_multi_weights <- function(mod_list, dat.list, y = NULL, weighted = F, lambda = 1, use_depth = F,
+                              alpha = 1,
                               parallel = T, normalized = T, calc = "Both", yprob = 1,
                               w = NULL, cores = max(detectCores() - 2,20), seed = -5,  ...){
 
@@ -527,7 +532,7 @@ get_multi_weights <- function(mod_list, dat.list, y = NULL, weighted = F, lambda
   }
 
   results <- get_results(mod_list = mod_list, parallel = parallel, weighted = weighted, normalized = F, use_depth = use_depth,
-                         calc = calc, lambda = lambda, w = w, cores = cores, yprob = yprob, seed = seed)
+                         calc = calc, lambda = lambda, alpha = alpha, w = w, cores = cores, yprob = yprob, seed = seed)
 
   net <- purrr::map(results, "net")
   weight_l <- purrr::map(results, "wl")
@@ -682,7 +687,7 @@ step_two_weight <- function(two_step, rm_noise, normalized, weight_l, dat.list, 
   weight_list
 }
 
-get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_depth = F, calc, lambda, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
+get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_depth = F, calc, lambda, alpha = 1, w = NULL, yprob = 1, cores = detectCores() - 2, seed = -5){
 
   mod_names <- names(mod_list)
   plyr::llply(
@@ -695,14 +700,15 @@ get_results <- function(mod_list, parallel, normalized = F, weighted = F, use_de
         w0 <- w[[gsub("_.*", "", m_name)]]
       } else {w0 <- NULL}
       results <- get_imp_forest(mod, parallel = parallel, normalized = normalized, 
-                                weighted = weighted, calc = calc, lambda = l, w = w0, 
+                                weighted = weighted, calc = calc, lambda = l, alpha = alpha,  w = w0, 
                                 yprob = yprob, cores = cores, use_depth = use_depth, seed = seed)
       wl <- results$imp_ls
       wl_init <- results$imp_ls_init
       net <- results$net
       m_name_sep <- unlist(stringr::str_split(m_name, "_"))
-
-      names(wl) <- rev(m_name_sep)
+      if(calc == "Both") names(wl) <- rev(m_name_sep)
+      if(calc == "X") names(wl) <- m_name_sep[2]
+      if(calc == "Y") names(wl) <- m_name_sep[1]
       # freq <- cal_freq(mod, net)
       # names(freq) <- rev(m_name_sep)
       return(list(

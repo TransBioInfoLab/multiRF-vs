@@ -5,7 +5,7 @@
 #' @param scale Whether to z-standardize each feature. Default is TRUE.
 #' @param yprob Probability of response features being selected in each node split. Default is 0.5.
 #' @param connect_list Pre-defined connection list between datasets. If provided, variable selection uses this list. If not, the algorithm finds optimal connections between datasets.
-#' @param var_prop Proportion of variance explained by PC datasets when finding optimal connections. Default is 0.6.
+#' @param var_prop Proportion of variance explained by PC datasets when finding optimal connections. Default is 0.1.
 #' @param direct Logical; determines whether to keep both directions in the connection list for optimal connections.
 #' @param lambda Penalizes variables selected only once in a tree. Experimental parameter. Default is 1.
 #' @param normalized Logical; determines whether to use normalized variable weights. Default is FALSE.
@@ -31,10 +31,10 @@ mrf3_init <- function(dat.list,
                  yprob = .5,
                  # Find connections
                  connect_list = NULL,
-                 var_prop = .6,
-                 direct = T,
-                 keep_prop = NULL,
+                 top = 2,
+                 var_prop = .1,
                  lambda = 1,
+                 alpha = 1,
                  normalized = F,
                  use_depth = F,
                  calc = "Both",
@@ -42,6 +42,7 @@ mrf3_init <- function(dat.list,
                  return_data = F,
                  cores = detectCores() - 2,
                  seed = 529,
+                 verbose = F,
                  ...){
 
   if(length(dat.list) == 1) type = "unsupervised"
@@ -49,8 +50,8 @@ mrf3_init <- function(dat.list,
 
   # Find connection
   if(is.null(connect_list) & length(dat.list) > 1){
-    message("Finding maximum connections..")
-    connection <- findConnection(dat.list = dat.list, var_prop = var_prop, direct = direct, keep_prop = keep_prop, seed = seed)
+    if(verbose)  message("Finding maximum connections..")
+    connection <- findConnection(dat.list = dat.list, var_prop = var_prop, seed = seed, top = top)
     connect_list <- stringr::str_split(connection, "_")
   }
   if(length(dat.list) == 1){
@@ -64,7 +65,7 @@ mrf3_init <- function(dat.list,
   }
 
 
-  message("Fitting models..")
+  if(verbose) message("Fitting models..")
 
   mod_list <- fit_multi_rfsrc(new_dat, connect_list = connect_list, ntree = ntree, type = type, yprob = yprob, seed = seed,...)
   oob_err <- purrr::map(mod_list, ~get_r_sq(.))
@@ -72,7 +73,7 @@ mrf3_init <- function(dat.list,
 
   w <- NULL
 
-  message("Calculating weights..")
+  if(verbose) message("Calculating weights..")
   multi_weights_mod <- get_multi_weights(mod_list = mod_list,
                                          dat.list = new_dat,
                                          y = y,
@@ -82,6 +83,7 @@ mrf3_init <- function(dat.list,
                                          calc = calc,
                                          type = type,
                                          lambda = lambda,
+                                         alpha = alpha,
                                          w = w,
                                          yprob = yprob,
                                          use_depth = use_depth,
@@ -109,7 +111,7 @@ mrf3_init <- function(dat.list,
 
   attr(out, "class") <- "mrf3"
 
-  message("Done!")
+  if(verbose) message("Done!")
 
   return(out)
 }

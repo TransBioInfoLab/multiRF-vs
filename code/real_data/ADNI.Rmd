@@ -1,0 +1,453 @@
+---
+title: "ADNI"
+output:
+  html_document:
+    highlight: pygments
+    theme: yeti
+    toc: true
+    number_sections: true
+    df_print: paged
+    code_download: false
+    toc_float:
+      collapsed: yes
+    toc_depth: 3
+editor_options:
+  chunk_output_type: inline   
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load related function
+dir.base <- "."
+script <- list.files( 
+  path = file.path(dir.base,"function"),
+  pattern = "[.]R$", 
+  full.names = T,
+  recursive = T
+)
+for (f in script) source(f)
+
+dir.data <- file.path(dir.base, "$data path$")
+dir.results <- file.path(dir.base, "results/real_data/ADNI")
+
+library(SummarizedExperiment)
+library(tidyverse)
+library(hgu219.db)
+```
+
+```{r message = F, warnign = F}
+# Load require library
+library(tidyverse)
+library(pheatmap)
+library(ggpubr)
+library(survival)
+library(survminer)
+library(ggvenn)
+library(clusterProfiler)
+library(msigdbr)
+library(mixOmics)
+library(circlize)
+library(patchwork)
+```
+
+# Data Preprocessing
+
+```{r eval = F}
+dnam <- readRDS(
+  file.path(dir.data, "ADNI/ADNI_all_sample_cn_mci_baseline_surv.rds")
+)
+# pheno <- colData(dnam) %>% as.data.frame()
+gene <- read_csv(
+  file.path(dir.data, "ADNI/ADNI_Gene_Expression_Profile.csv"),
+  show_col_types = F,
+  col_names = F
+)
+
+exp <- gene[-c(1:9),]
+exp <- exp %>% tidyr::separate_rows("X3")
+exp$X748 <- NULL
+colnames(exp)[1:3] <- gene[9,1:3]
+exp[,grep("^X",colnames(exp))] <- apply(exp[,grep("^X",colnames(exp))], 2, as.numeric)
+x <- hgu219SYMBOL
+# Get the entrez gene IDs that are mapped to an Ensembl ID, this is required by MethReg
+probe.to.symbol <- as.data.frame(as.list(x) %>% unlist) %>% na.omit
+exp$Symbol <- probe.to.symbol[exp$ProbeSet,]
+exp <- exp[!is.na(exp$Symbol),]
+
+# dropping genes in bottom 10 percentile for over 80% of the samples
+genes.low.expressed.samples.count <- plyr::aaply(
+  exp[,grep("^X",colnames(exp))] ,
+  .margins = 2, # for each sample set get all genes
+  .fun = function(sample.genes){
+    # for each sample, mark the bottom 10% less expressed genes as 1
+    sample.genes[[1]]  <= quantile(sample.genes[[1]] , probs = c(.10),type = 3)
+  }) %>% colSums()
+genes.idx <- which(genes.low.expressed.samples.count > (length(grep("^X",colnames(exp))) * 0.8))
+exp <- exp[-c(genes.idx),]
+
+# Since we have multiple probes mapping to the same gene in the array 
+# we will take the median of the same genes
+# as suggest in https://www.nature.com/articles/s41598-020-60595-1
+expression.matrix <- plyr::aaply(unique(exp$Symbol),.margins = 1,.fun = function(gene){
+  dat <- exp[exp$Symbol == gene,grep("^X",colnames(exp))]
+  colMedians(dat %>% as.matrix)
+},.progress = "time") 
+rownames(expression.matrix) <- unique(exp$Symbol)
+
+subject_id <- as.character(gene[3,-c(1:3, 748)])
+colnames(expression.matrix) <- subject_id
+
+common_subjects <- intersect(subject_id, dnam$PTID)
+expression.matrix.common <- expression.matrix[,common_subjects]
+
+dnam.common <- dnam[,match(common_subjects, dnam$PTID)]
+beta <- assay(dnam.common)
+```
+
+```{r eval = F}
+get_most_variable_gene <- function(exp, zero_thres = 0.2, top = 1000, transpose = T){
+  
+  exp_zero <- rowSums(exp == 0)/ncol(exp)
+  exp_filtered <- exp[exp_zero <= zero_thres,]
+  
+  if(nrow(exp_filtered) > top){
+    var <- apply(exp_filtered, 1, var)
+    order_var <- order(var, decreasing = T)[1:top]
+    exp_filtered <- exp_filtered[order_var,]
+  }
+
+  if(transpose){
+     exp_filtered <- exp_filtered %>% t() %>% as.data.frame()
+  }
+  
+  return(exp_filtered)
+}
+
+exp <- get_most_variable_gene(expression.matrix.common, top = 2000)
+#beta_selected <- get_most_variable_gene(beta, top = 2000)
+```
+
+# Load results
+
+```{r eval = F}
+results_meta <- read_csv(
+  file.path(dir.data, "ADNI/meta_analysis_FHS9_ADNI_results.csv"),
+  show_col_types = F
+)
+results_sig <- results_meta %>%
+  filter(fdr < 0.05 & direction %in% c("++", "--") &
+           ADNI_pValue.bacon < 0.05, FHS9_pValue.bacon < 0.05)
+results_top <- results_meta %>%
+  slice_min(FHS9_pValue.bacon, n = 2000)
+selected_cpgs <- results_top %>% pull(cpg)
+```
+
+```{r eval = F}
+beta <- assay(dnam.common)[selected_cpgs,]
+colnames(beta) <- common_subjects
+pheno <- colData(dnam.common) %>% as.data.frame()
+adni <- list(gene = exp, methyl = t(beta))
+```
+
+```{r eval = F}
+save(
+  adni,
+  pheno,
+  file = file.path(dir.data, "ADNI/ADNI_data.rda")
+)
+```
+
+```{r}
+rm(dnam, dnam.common, gene, expression.matrix, expression.matrix.common)
+gc()
+```
+
+```{r}
+load(
+  file.path(dir.data, "ADNI/ADNI_data.rda")
+)
+```
+
+# Fit MRF model
+
+```{r eval = F}
+mod <- mrf3_init(adni, scale = F, connect_list = list(c("gene", "methyl")))
+mod_vs <- mrf3_vs(mod, adni, scale = F, method = "filter", se = 1.4)
+
+save(mod, mod_vs, file = file.path(dir.results, "ADNI_mrf_mod.rda"))
+```
+
+```{r}
+load(file.path(dir.results, "ADNI_mrf_mod.rda"))
+p1 <- plot_weights(mod$weights, labels = c("Gene", "Methyl"))
+p1 
+ggsave(
+  file.path(dir.results,"ADNI_var_plot.pdf"),
+  width = 10,
+  height = 5
+)
+```
+
+```{r eval = F}
+ora_results_c2cp <- ORA(colnames(mod_vs$dat.list$gene),
+                        pathway = "c2.cp", 
+                        minGSSize = 2, 
+                        maxGSSize = 1000)
+ora_results_h <- ORA(colnames(mod_vs$dat.list$gene),
+                     pathway = "H", 
+                     minGSSize = 2, 
+                     maxGSSize = 1000)
+ora_results_go <- ORA(colnames(mod_vs$dat.list$gene), 
+                      pathway = "c5.bp", 
+                      minGSSize = 2, 
+                      maxGSSize = 1000)
+```
+
+```{r eval = F, echo = F}
+results <- rbind(data.frame(data.frame(ora_results_c2cp@result), 
+                            category = rep("Canonical", nrow(data.frame(ora_results_c2cp@result)))),
+                  data.frame(data.frame(ora_results_go@result), 
+                            category = rep("GO", nrow(data.frame(ora_results_go@result)))),
+                 data.frame(data.frame(ora_results_h@result), 
+                            category = rep("Hallmark", nrow(data.frame(ora_results_h@result)))))
+
+results_sig2 <- results %>% filter(p.adjust < 0.05)
+
+write_csv(
+  results,
+  file = file.path(dir.results, "ADNI_pathway_analysis.csv")
+)
+
+write_csv(
+  results_sig2,
+  file = file.path(dir.results, "ADNI_pathway_analysis_sig_results.csv")
+)
+```
+
+```{r fig.width=15, fig.height=8}
+results_sig_mrf <- read_csv(
+   file = file.path(dir.results, "ADNI_pathway_analysis_sig_results.csv")
+)
+plot_pathway(results_sig_mrf, ylim = 1e-10, padj = 0.25) + 
+  ggtitle("ADNI")
+```
+
+```{r}
+library(missMethyl)
+results_kegg <- gometh(results_sig$cpg, collection = "KEGG", array.type = "EPIC")
+results_kegg2 <- gometh(colnames(mod_vs$dat.list$methyl), collection = "KEGG", array.type = "EPIC")
+results_go <- gometh(results_sig$cpg, collection = "GO", array.type = "EPIC")
+results_go2 <- gometh(colnames(mod_vs$dat.list$methyl), collection = "GO", array.type = "EPIC")
+```
+
+```{r}
+top_kegg <- topGSA(results_kegg, number = 15) %>% 
+  rownames_to_column("ID") %>%
+  dplyr::select(ID, Description, P.DE) 
+top_kegg2 <- topGSA(results_kegg2, number = 15) %>% 
+  rownames_to_column("ID") %>%
+  dplyr::select(ID, Description, P.DE) 
+top_go <- topGSA(results_go, number = 15) %>% 
+  rownames_to_column("ID") %>%
+  dplyr::select(ID, Description = TERM, P.DE) 
+top_go2 <- topGSA(results_go2, number = 15) %>% 
+  rownames_to_column("ID") %>%
+  dplyr::select(ID, Description = TERM, P.DE) 
+```
+
+```{r}
+writexl::write_xlsx(
+  list(KEGG_sig = top_kegg, 
+       KEGG_MRF = top_kegg2,
+       GO_sig = top_go,
+       GO_MRF = top_go2),
+  file.path(dir.results, "ADNI_missMethly_pathways_top15.xlsx")
+)
+```
+
+# Fit SPLS model
+
+```{r}
+test.keepX <- list(
+  gene = c(20, 50, 100, 200, 250, 300),
+  methyl = c(20, 50, 100, 200, 250, 300)
+)
+# 5) Grid‐search
+best_score <- -Inf
+best_keepX <- NULL
+ncomp = 5
+# B <- length(tcga_brca)
+# design <- matrix(1/(B-1), nrow=B, ncol=B)
+
+for (k1 in test.keepX$gene) {
+  for (k2 in test.keepX$methyl) {
+    keepX <- list(gene = rep(k1, ncomp),
+                  methyl = rep(k2, ncomp))
+    # fit block.spls
+    mod <- block.spls(
+      X      = adni,
+      indY = 2,
+      ncomp  = ncomp,
+      keepX  = keepX
+    )
+    score <- sum(mod$AVE$AVE_inner)
+    if (score > best_score) {
+      best_score  <- score
+      best_keepX  <- keepX
+    }
+  }
+}
+
+
+mod_spls <- mixOmics::block.spls(
+  X = adni,
+  indY = 2,
+  ncomp = 5,
+  keepX = list(gene = 160, methyl = 50)
+)
+
+```
+
+```{r eval = F}
+ora_results_c2cp <- ORA(names(mod_spls$loadings$gene[,1])[mod_spls$loadings$gene[,1] != 0],
+                        pathway = "c2.cp", 
+                        minGSSize = 2, 
+                        maxGSSize = 1000)
+ora_results_h <- ORA(names(mod_spls$loadings$gene[,1])[mod_spls$loadings$gene[,1] != 0],
+                     pathway = "H", 
+                     minGSSize = 2, 
+                     maxGSSize = 1000)
+ora_results_go <- ORA(names(mod_spls$loadings$gene[,1])[mod_spls$loadings$gene[,1] != 0], 
+                      pathway = "c5.bp", 
+                      minGSSize = 2, 
+                      maxGSSize = 1000)
+```
+
+```{r eval = F, echo = F}
+results <- rbind(data.frame(data.frame(ora_results_c2cp@result), 
+                            category = rep("Canonical", nrow(data.frame(ora_results_c2cp@result)))),
+                  data.frame(data.frame(ora_results_go@result), 
+                            category = rep("GO", nrow(data.frame(ora_results_go@result)))),
+                 data.frame(data.frame(ora_results_h@result), 
+                            category = rep("Hallmark", nrow(data.frame(ora_results_h@result)))))
+
+results_sig <- results %>% filter(p.adjust < 0.25)
+
+write_csv(
+  results,
+  file = file.path(dir.results, "ADNI_pathway_analysis_spls.csv")
+)
+
+write_csv(
+  results_sig,
+  file = file.path(dir.results, "ADNI_pathway_analysis_sig_results_spls.csv")
+)
+```
+
+```{r fig.width = 12, fig.height=12}
+results <- read_csv(
+  file = file.path(dir.results, "ADNI_pathway_analysis_sig_results_spls.csv")
+)
+g6_brca <- plyr::llply(
+  c("gene", "methyl",  "pathway"),
+  .fun = function(d) {
+    if(d != "pathway") {
+       ggvenn::ggvenn(list("MRF-IMD" = colnames(mod_vs$dat.list[[d]]),
+       "SPLS" = names(mod_spls$loadings[[d]][,1])[mod_spls$loadings[[d]][,1] != 0])   
+      )
+    } else {
+       ggvenn::ggvenn(list("MRF-IMD" = results_sig_mrf$ID[results_sig_mrf$p.adjust < 0.05],
+       "SPLS" = results$ID[results$p.adjust < 0.05])   
+        )
+    }
+
+  }
+)
+ggpubr::ggarrange(plotlist = g6_brca, ncol = 2, nrow = 2, labels = c("Gene", "Methyl", "Pathway"))
+```
+
+# Survival analysis and KM plot
+
+```{r eval = F}
+nmf_mod <- IntNMF::nmf.mnnals(
+  adni %>% purrr::map(., ~as.matrix(.)), 2
+)
+
+dat_pos_spls <- purrr::map(
+    mod_spls$variates, ~{
+      if(!all(. > 0)) {
+        m <- abs(min(.))
+        . <- pmax(. + m, 0)
+        as.matrix(./max(.))
+      }
+    }
+  )
+nmf_mod_spls <- IntNMF::nmf.mnnals(
+  dat_pos_spls, 2
+)
+
+nmf_mod_mrf <- IntNMF::nmf.mnnals(
+  mod_vs$dat.list %>% purrr::map(., ~as.matrix(.)), 2
+)
+
+save(nmf_mod, nmf_mod_spls, nmf_mod_mrf, file = file.path(dir.results, "NMF_all_var_spls_mod.rda"))
+```
+
+```{r}
+mrs_coef <- readxl::read_xlsx(
+  file.path(dir.results, '../../../Supp/Supp Table 19 - ridge regression weights_effect_size_cpgs.xlsx'),
+  skip = 2
+)
+dnam_selected <- dnam[mrs_coef$...1,]
+beta_selected <- assay(dnam_selected)
+M_selected <- minfi::logit2(beta_selected)
+mrs <- mrs_coef$weight %*% M_selected %>% t()
+names(mrs) <- dnam_selected$barcodes
+```
+
+```{r fig.width=16, fig.height=6}
+load(file.path(dir.results, "NMF_all_var_spls_mod.rda"))
+pheno$status <- ifelse((pheno$DX == "CN" & pheno$DX2 %in% c("Dementia", "MCI"))|
+                          (pheno$DX == "MCI" & pheno$DX2 %in% c("Dementia")), 1, 0)
+pheno_filtered <- pheno %>% filter(SurvDays < 4380 & SurvDays > 0)
+mrs <- mrs[pheno$barcodes,]
+k1 <- KM_plot(nmf_mod$clusters %>% factor, "SurvDays", "status", pheno, title = "All Variables Integration")
+k2 <- KM_plot(mrs, "SurvDays", "status", pheno, cut = "maxstat",
+              title = "MRS Dichotomized (Zhang et al.)") 
+k3 <- KM_plot(nmf_mod_mrf$clusters %>% factor, "SurvDays", "status", pheno,
+              title = "MRF-IMD Selected Variables Integration") 
+k4 <- KM_plot(nmf_mod_spls$clusters %>% factor, "SurvDays", "status", pheno,
+              title = "SPLS Selected Variables Integration") 
+g7 <- k1$plot + k2$plot + k4$plot + 
+  plot_layout(ncol = 3) + 
+  plot_annotation(
+                  theme =  theme(plot.title = element_text(face = "bold", size = 14)))
+g7
+ggsave(
+  file.path(dir.results, "ADNI_kmplot_others.pdf"),
+  width = 18,
+  height = 6
+)
+k3$plot
+ggsave(
+  file.path(dir.results, "ADNI_kmplot_MRF.pdf"),
+  width = 6,
+  height = 6
+)
+```
+
+```{r}
+selected_cpgs <- colnames(mod_vs$dat.list$methyl)
+sc <- mod_vs$dat.list$methyl %*% results_meta$estimate[match(selected_cpgs, results_meta$cpg)]
+pheno$MRS1 <- mrs
+pheno$MRF_NMF_comp <- scale(nmf_mod_mrf$W[,1])
+pheno$r <- r
+mod1 <- coxph(
+  Surv(SurvDays, status) ~ MRF_NMF_comp + AGE + PTGENDER + APOE4 + MMSE_bl + PTEDUCAT + DX,
+  data = pheno
+)
+summary(mod1)
+```
+
+

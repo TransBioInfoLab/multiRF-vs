@@ -120,7 +120,7 @@ fit_multi_rfsrc <- function(dat.list, connect_list = NULL, var.wt = NULL, yprob 
             ytry <- min(ceiling(ncol(dat_fit[[1]]) * yprob), length(varwt[[1]][varwt[[1]] != 0]))
           }
 
-          if(ytry == ncol(dat_fit[[1]])) ytry <- NULL
+          # if(ytry == ncol(dat_fit[[1]])) ytry <- NULL
 
           mod <- fit_rfsrc(dat_fit[[2]], dat_fit[[1]], xvar.wt = varwt[[2]], yvar.wt = varwt[[1]], ytry = ytry, seed = seed, ...)
         }

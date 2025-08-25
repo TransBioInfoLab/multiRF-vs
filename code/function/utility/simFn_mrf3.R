@@ -1,121 +1,164 @@
+### Load packages
+library(PMA)
+library(mixOmics)
+library(RGCCA)
+library(caret)
 library(truncnorm)
-sim.fn.mrf3.m <- function(B = 200, sim.mod = "SimpleLinear", sim.para, parallel = T, j = 2, ...){
+
+# MRF
+sim.fn.mrf3.m <- function(dat, ...){
   
-  if(parallel) doParallel::registerDoParallel(3)
+  mrfinit  <- mrf3_init(dat$X, ...)
   
-  mod <- plyr::llply(
-    1:B,
-    .fun = function(i){
-      if(sim.mod == "SimpleLinear"){
-        dat <- sim.linear3(
-          n = sim.para$n,
-          p = sim.para$p,
-          rho = sim.para$rho,
-          psel = sim.para$psel
-        )
-        
-      }else if(sim.mod == "Covariance"){
-        dat <- sim.cov(
-          n = sim.para$n,
-          p = sim.para$p,
-          ccor = sim.para$ccor,
-          rho = sim.para$rho,
-          psel = sim.para$psel
-        )
-      }else if(sim.mod == "SimpleNonLinear"){
+  imp_init <- plyr::llply(
+    c("filter", "mixture", "test"),
+    .fun = function(m) {
+      w <- mrf3_vs(mrfinit, dat.list = dat$X, method = m)
+      Reduce(c, w$weights)
+    }
+  )
 
-        dat <- sim.nonlinear2(
-          n = sim.para$n,
-          p = sim.para$p,
-          rho = sim.para$rho,
-          psel = sim.para$psel,
-          j = sim.para$j
-        )
-      }else if(sim.mod %in% c("NonLinearReg", "high_dimentional")){
-        dat <- sim.nonlinear3(
-          n = sim.para$n,
-          p = sim.para$p,
-          p.group = sim.para$p.group,
-          q.group = sim.para$q.group,
-          p.b = sim.para$p.b
-        )
-      }else{
-        dat <- sim.interaction1(
-          n = sim.para$n,
-          p = sim.para$p
-        )
-
-      }
-      
-      tryCatch({
-
-        modinit <- mrf3_init(
-          dat.list = dat$X, 
-          parallel = parallel,
-          ...
-        )
-        
-        mod <- list(
-          # test =  mrf3_vs(modinit, dat.list = dat$X, method = "test")
-          # thres1 = mrf3_vs(modinit, method = "thres", se = 0),
-          # thres1_se = mrf3_vs(modinit, method = "thres", se = 2),
-          # thres2 = mrf3_vs(modinit, method = "thres", use_distribution = F),
-          # mixture = mrf3_vs(modinit, method = "mixture"),
-          # mixture2 = mrf3_vs(modinit, dat.list = dat$X, method = "mixture", c1 = "normal")
-          filter = mrf3_vs(modinit, dat.list = dat$X, method = "filter")
-        ) 
-
-        feature.sel.scores <- mod %>% purrr::map(., ~.$weights)
-        feature.sel.labels <- plyr::llply(
-          feature.sel.scores,
-          .fun = function(mm) {
-            mm %>% purrr::map(~ifelse(. > 0, 1, 0))
-          }
-        )
+  names(imp_init) <- c("filter", "mixture", "test")
+  
+  imp_a <- plyr::llply(
+    c(0.1, 0.5),
+    .fun = function(a){
+      wla <- plyr::llply(
+        mrfinit$weights_ls,
+        .fun = function(wl) {
+          Xa <- sapply(wl %>% purrr::map("X"), function(w) {
+            new_w <- w^a
+          }) %>% rowMeans()
+          Ya <- sapply(wl %>% purrr::map("Y"), function(w) {
+            new_w <- w^a
+          }) %>% rowMeans()
+          list(X = Xa, Y = Ya)
+        }
+      )
+      wls <- plyr::llply(
+        1:length(mrfinit$connection),
+        .fun = function(i) {
+          connection <- mrfinit$connection[[i]]
+          names(wla[[i]]) <- rev(connection)
+          wla[[i]]
+        }
+      )
+      wl <- plyr::llply(
+        names(dat$X),
+        .fun = function(x) {
+          k <- wls %>% purrr::map(x)
+          k <- purrr::compact(k)
+          Reduce("+", k)/length(k)
           
-        return(list(scores = feature.sel.scores, freq = feature.sel.labels))
-      },error = function(e) {print(e);return(NULL)})
-      
-    },.parallel = F
-  )
-  mod <- mod %>% purrr::discard(is.null)
-
-  dat_names <- names(mod[[1]]$scores[[1]])
-
-  v <- plyr::llply(
-    names(mod[[1]]$scores),
-    .fun = function(j) {
-      mod2 <- mod %>% purrr::map("scores") %>% purrr::map(j)
-      res <- plyr::llply(
-        dat_names,
-        .fun = function(i){
-          mod2 %>% purrr::map(i) %>% Reduce(rbind,.)
         }
       )
-      names(res) <- dat_names
-      res
+      names(wl) <- names(dat$X)
+      mrfinit$weights <- wl
+
+      mod_a <- plyr::llply(
+        c("filter", "mixture", "test"),
+        .fun = function(m) {
+          w <- mrf3_vs(mrfinit, dat.list = dat$X, method = m)
+          Reduce(c, w$weights)
+        }
+      )
+      names(mod_a) <- c("filter", "mixture", "test")
+      mod_a
     }
-  )
     
-  names(v) <- names(mod[[1]]$scores)
-  
-  fr <- plyr::llply(
-    names(mod[[1]]$freq),
-    .fun = function(j) {
-      mod2 <- mod %>% purrr::map("freq") %>% purrr::map(j)
-      res <- plyr::llply(
-        dat_names,
-        .fun = function(i){
-          mod2 %>% purrr::map(i) %>% Reduce(rbind,.)
-        }
-      )
-      names(res) <- dat_names
-      res
-    }
   )
-  names(fr) <- names(mod[[1]]$freq)
+
+  names(imp_a) <- paste0("IMD_a0", c(1,5))
   
-  return(
-    list(scores = v, freq = fr)
-  )
+  M <- c(list(IMD = imp_init), imp_a)
+  
+  
 }
+
+# Other benchmark methods
+## Tuning functions
+cca.with.tune <- function(X,Y,...){
+  
+  # perm.out <- CCA.permute(
+  #   x = as.matrix(X),z = as.matrix(Y),trace = F,
+  #   ...
+  # )
+  
+  out <- CCA(
+    x=as.matrix(X),z=as.matrix(Y),
+    typex = "standard",
+    typez = "standard",
+    # penaltyx=perm.out$bestpenaltyx,
+    # v=perm.out$v.init, 
+    # penaltyz=perm.out$bestpenaltyz,
+    xnames=colnames(X),
+    znames=colnames(Y),
+    trace = F,...
+  )
+  
+  return(out)
+}
+
+spls.with.tune <- function(X, Y, keep.list,...){
+  
+  list.keepX <- keep.list[[1]]
+  list.keepY <- keep.list[[2]]
+  t <- tune.spls(X = X, Y = Y, ncomp = 1,
+                 test.keepX = list.keepX,
+                 test.keepY = list.keepY,
+                 nrepeat = 1, folds = 3, 
+                 measure = 'cor',... ) 
+  
+  sim.spls = spls(X = X, Y = Y, ncomp = 1, 
+                  keepX = t$choice.keepX, keepY = t$choice.keepY)
+  
+  return(sim.spls)
+  
+}
+
+## Wrapper functions
+
+sim.fn.other <- function(dat, cca.model = "spls", keep.list = NULL, ...){
+
+  X <- dat$X %>% purrr::map(.,~scale(.))
+  if(cca.model == "SPLS"){
+    
+    mod <- block.spls(
+      X = X, indY = length(X),  keepX = keep.list, ncomp = 1,
+      ...
+    )
+    
+    feature.sel.scores <- mod$loadings %>% purrr::map(.,~.[,1])
+    for (i in 1:length(X)) {
+      names(feature.sel.scores[[i]]) <- colnames(X[[i]])
+    }
+  } 
+
+  if(cca.model == "PMDCCA"){
+    
+    mod <- MultiCCA(
+      X,
+      ...
+    )
+    
+    feature.sel.scores <- mod$ws %>% purrr::map(.,~.[,1]) 
+    names(feature.sel.scores) <- names(X)
+    for (i in 1:length(X)) {
+      names(feature.sel.scores[[i]]) <- colnames(X[[i]])
+    }
+  } 
+  if(cca.model == "RGCCA"){
+    mod <- rgcca(X, sparsity = 0.2)
+    
+    feature.sel.scores <- mod$a %>% purrr::map(.,~.[,1])
+    for (i in 1:length(X)) {
+      names(feature.sel.scores[[i]]) <- colnames(X[[i]])
+    }
+  }
+        
+  Reduce(c,feature.sel.scores)
+
+}
+
+
+

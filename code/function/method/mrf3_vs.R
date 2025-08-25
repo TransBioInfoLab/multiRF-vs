@@ -6,7 +6,7 @@
 mrf3_vs <- function(mod, 
                     dat.list,
                     method = "filter",       # Selection method: "filter", "test", "mixture"
-                    se = 0,                  # Standard error multiplier for thresholding. Use if method = "filter"
+                    se = NULL,                  # Standard error multiplier for thresholding. Use if method = "filter". If NULL, select by best OOB error
                     c1 = "normal",           # Parameter for mixture model. Use if method = "mixture"
                     c2 = "normal",           # Parameter for mixture model. Use if method = "mixture"
                     level = 0.05,            # Significance level for t-test. Use if method = "test"
@@ -82,6 +82,7 @@ mrf3_vs <- function(mod,
       k = k, 
       select = select,
       tol = tol,
+      se = se,
       ...)
     
   }
@@ -245,72 +246,76 @@ calc_mean_sd <- function(mat) {
 }
 
 # Function to choose optimal thresholds by minimizing OOB error
-choose_thres2 <- function(weights, connection, new_dat, yprob, ntree, type, oob_init, k = 3, tol = 0.01, select = "ALL", ...) {
+choose_thres2 <- function(weights, connection, new_dat, yprob, ntree, type, oob_init, k = 3, tol = 0.01, select = "ALL", se = se,  ...) {
   
-  num <- seq(.8,3.1,by = 0.1)
-  oob <- c()
-  i <- 1
-  while(i <= length(num)) {
-    t <- num[i]
-
-    weights_new <- plyr::llply(
-      weights,
-      .fun = function(w) {
-        
-        thres <- t * sd(w)
-        if(select != 'ALL') {
+  if(is.null(se)) {
+    num <- seq(.8,3.1,by = 0.1)
+    oob <- c()
+    i <- 1
+    while(i <= length(num)) {
+      t <- num[i]
+      
+      weights_new <- plyr::llply(
+        weights,
+        .fun = function(w) {
           
-          if(i %in% select) {
+          thres <- t * sd(w)
+          if(select != 'ALL') {
+            
+            if(i %in% select) {
+              w[w < thres] <- 0
+              w[w > thres] <- w[w > thres] - thres
+            } 
+          } else {
             w[w < thres] <- 0
             w[w > thres] <- w[w > thres] - thres
-          } 
-        } else {
-          w[w < thres] <- 0
-          w[w > thres] <- w[w > thres] - thres
+          }
+          
+          w
+          
         }
-
-        w
-
-      }
-    )
-    
-    new_dat2 <- plyr::llply(
-      names(new_dat),
-      .fun = function(i){
-        if(select != 'ALL') {
-          if(i %in% select) {
+      )
+      
+      new_dat2 <- plyr::llply(
+        names(new_dat),
+        .fun = function(i){
+          if(select != 'ALL') {
+            if(i %in% select) {
+              new_dat[[i]] <- new_dat[[i]][,weights_new[[i]] != 0]
+              new_dat[[i]]
+            } else {
+              new_dat[[i]]
+            }
+          } else {
             new_dat[[i]] <- new_dat[[i]][,weights_new[[i]] != 0]
             new_dat[[i]]
-          } else {
-            new_dat[[i]]
           }
-        } else {
-          new_dat[[i]] <- new_dat[[i]][,weights_new[[i]] != 0]
-          new_dat[[i]]
         }
-      }
-    )
-    names(new_dat2) <- names(new_dat)
+      )
+      names(new_dat2) <- names(new_dat)
+      
+      oob_err0 <- plyr::laply(1:k,
+                              .fun = function(k) {
+                                refit <- fit_multi_rfsrc(new_dat2, connect_list = connection, 
+                                                         ntree = ntree, type = type, yprob = yprob, 
+                                                         var.wt = NULL,
+                                                         forest.wt = "oob")
+                                
+                                oob_err <- purrr::map(refit, ~get_r_sq(.))
+                                Reduce("+", oob_err)/length(new_dat2)
+                              })
+      
+      oob_err <- mean(unlist(oob_err0))
+      oob <- c(oob, oob_err)
+      oob_init <- oob_err
+      i <- i + 1
+    }
+    diff <- abs(diff(oob[-1]))
+    t <- sort(num[-1][which(diff < tol)])[1]
+  } else { t <- se}
+  
 
-    oob_err0 <- plyr::laply(1:k,
-                            .fun = function(k) {
-                              refit <- fit_multi_rfsrc(new_dat2, connect_list = connection, 
-                                                       ntree = ntree, type = type, yprob = yprob, 
-                                                       var.wt = NULL,
-                                                       forest.wt = "oob")
-                              
-                              oob_err <- purrr::map(refit, ~get_r_sq(.))
-                              Reduce("+", oob_err)/length(new_dat2)
-                            })
-    
-    oob_err <- mean(unlist(oob_err0))
-    oob <- c(oob, oob_err)
-    oob_init <- oob_err
-    i <- i + 1
-  }
-
-  diff <- abs(diff(oob[-1]))
-  t <- sort(num[-1][which(diff < tol)])[1]
+ 
   
   message("Choose ", t, " times sd")
   thres <- plyr::llply(
@@ -373,7 +378,13 @@ test_fn <- function(wl, connection, dat_names, sig.thres = 0.05) {
 
   keep_idx <- purrr::map(res, "keep_idx")
   p <- purrr::map(res, "pval")
-  ts <- purrr::map(res, "ts")
+  trans_score <- ts <- purrr::map(res, "ts")
+  trans_score <- plyr::llply(dat_names,
+                             .fun = function(d) {
+                               ts0 <- purrr::map(ts, d) %>% purrr::compact()
+                               Reduce("+", ts0)/length(ts0)
+                             })
+  names(trans_score) <- dat_names
 
   keep_res <- plyr::llply(dat_names,
               .fun = function(d) {
@@ -402,6 +413,7 @@ test_fn <- function(wl, connection, dat_names, sig.thres = 0.05) {
 
   list(keep_idx = keep_idx,
        pval = p,
-       ts = ts)
+       ts = ts,
+       trans_score = trans_score)
 
 }
