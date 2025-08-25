@@ -26,9 +26,10 @@ High-throughput technologies now produce a wide array of omics data, from genomi
 
 **Real data analysis**
 
-- `data_prepare.Rmd`: Real data download and preprocessing
-- `$DATA$.R`: Performs model fitting for real data analysis on each TCGA data
-- `real_data_analysis.Rmd`: Contains figures generated for the manuscript
+- `data_prepare.Rmd`: Real data download and preprocessing of TCGA data
+- `BRCA_COAD.Rmd`: Comprehensive Analysis of Individual Cancer Data: Breast Cancer and Colorectal Cancer
+- `PAN.R`: TCGA PAN Cancer Clustering Analysis
+- `ADNI.Rmd`: Integrative Analysis Enhances Prediction of Dementia Progression in the ADNI Cohort
 
 ### Instruction
 
@@ -36,23 +37,27 @@ For instructions on performing MRF multi-omics variable selection as described i
 
 ### Data Accessibility
 
-- RNAseq datasets: from R package TCGAbiolinks
-- Others: from UCSC Xena: [https://xena.ucsc.edu/]([https://xena.ucsc.edu/)
+- TCGA data
+  - RNAseq datasets: from R package TCGAbiolinks
+  - Others: from UCSC Xena: [https://xena.ucsc.edu/]([https://xena.ucsc.edu/)
 
-| Dataset   | Data Type       | Link                                                         |
-| --------- | --------------- | ------------------------------------------------------------ |
-| TCGA-BRCA | Gene Expression | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FHiSeqV2&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | miRNA           | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FmiRNA_HiSeq_gene&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | DNA Methylation | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FHumanMethylation450&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | Survival Data   | [View Data](https://xenabrowser.net/datapages/?dataset=survival%2FBRCA_survival.txt&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | Phenotype       | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FBRCA_clinicalMatrix&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-| TCGA-COAD | Gene Expression | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FHiSeqV2&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | miRNA           | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FmiRNA_HiSeq_gene&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | DNA Methylation | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FHumanMethylation450&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | Survival Data   | [View Data](https://xenabrowser.net/datapages/?dataset=survival%2FCOAD_survival.txt&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | Phenotype       | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FCOAD_clinicalMatrix&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-| TCGA-PAN  | ATAC-Seq        | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA_ATAC_peak_Log2Counts_dedup_sample&host=https%3A%2F%2Fatacseq.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
-|           | RNA-Seq         | [View Data Download Code](https://github.com/TransBioInfoLab/multiRF-vs/blob/main/code/real_data/data_prepare.Rmd) |
+- ADNI data: [adni.loni.usc.edu](adni.loni.usc.edu) 
+
+| Dataset   | Data Type                         | Link                                                         |
+| --------- | --------------------------------- | ------------------------------------------------------------ |
+| TCGA-BRCA | Gene Expression                   | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FHiSeqV2&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | miRNA                             | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FmiRNA_HiSeq_gene&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | DNA Methylation                   | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FHumanMethylation450&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | Survival Data                     | [View Data](https://xenabrowser.net/datapages/?dataset=survival%2FBRCA_survival.txt&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | Phenotype                         | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.BRCA.sampleMap%2FBRCA_clinicalMatrix&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+| TCGA-COAD | Gene Expression                   | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FHiSeqV2&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | miRNA                             | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FmiRNA_HiSeq_gene&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | DNA Methylation                   | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FHumanMethylation450&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | Survival Data                     | [View Data](https://xenabrowser.net/datapages/?dataset=survival%2FCOAD_survival.txt&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | Phenotype                         | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA.COAD.sampleMap%2FCOAD_clinicalMatrix&host=https%3A%2F%2Ftcga.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+| TCGA-PAN  | ATAC-Seq                          | [View Data](https://xenabrowser.net/datapages/?dataset=TCGA_ATAC_peak_Log2Counts_dedup_sample&host=https%3A%2F%2Fatacseq.xenahubs.net&removeHub=https%3A%2F%2Fxena.treehouse.gi.ucsc.edu%3A443) |
+|           | RNA-Seq                           | [View Data Download Code](https://github.com/TransBioInfoLab/multiRF-vs/blob/main/code/real_data/data_prepare.Rmd) |
+| ADNI      | Gene Expression & DNA Methylation | [ADNI study website](adni.loni.usc.edu)                      |
 
 
 ### For Reproducible Research
